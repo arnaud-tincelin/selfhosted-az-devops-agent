@@ -1,0 +1,18 @@
+#cloud-config
+
+write_files:
+- path: /usr/local/bin/az_devops_agent.sh
+  permissions: '0755'
+  content: |
+    #! /bin/bash
+
+    mkdir -p ~/myagent
+    cd ~/myagent
+    wget --quiet https://vstsagentpackage.azureedge.net/agent/2.202.1/vsts-agent-linux-x64-2.202.1.tar.gz
+    tar zxf vsts-agent-linux-x64-2.202.1.tar.gz
+    rm vsts-agent-linux-x64-2.202.1.tar.gz
+    ./config.sh --unattended --agent placeholder-do-not-delete --url ${azp_url} --auth PAT --token ${azp_token} --pool ${azp_pool} --replace --acceptTeeEula
+    cd ~ && rm -rf ~/myagent
+- path: /etc/cron.d/az_devops_agent # using a CRON because the config.sh script must not be ran as sudo
+  content: |
+    * * * * * ${username} /usr/local/bin/az_devops_agent.sh

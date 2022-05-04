@@ -1,0 +1,176 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "String"
+    },
+    "azp_url": {
+      "type": "String"
+    },
+    "azp_token": {
+      "type": "securestring"
+    },
+    "azp_pool": {
+      "type": "String"
+    },
+    "azp_poolID": {
+      "type": "String"
+    },
+    "registry_server": {
+      "type": "String"
+    },
+    "registry_username": {
+      "type": "String"
+    },
+    "registry_password": {
+      "type": "securestring"
+    },
+    "image": {
+      "type": "String"
+    },
+    "min_replicas": {
+      "type": "Int"
+    },
+    "max_replicas": {
+      "type": "Int"
+    },
+    "log_analytics_customer_id": {
+      "type": "string",
+      "metadata": {
+        "description": "Log analytics customer id"
+      }
+    },
+    "log_analytics_shared_key": {
+      "type": "string",
+      "metadata": {
+        "description": "Log analytics customer key"
+      }
+    },
+    "infrastructureSubnetId": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource ID of a subnet for infrastructure components. This subnet must be in the same VNET as the subnet defined in runtimeSubnetId. Must not overlap with any other provided IP ranges."
+      }
+    },
+    "runtimeSubnetId": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource ID of a subnet that Container App containers are injected into. This subnet must be in the same VNET as the subnet defined in infrastructureSubnetId. Must not overlap with any other provided IP ranges."
+      }
+    }
+  },
+  "variables": {},
+  "resources": [
+    {
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2022-01-01-preview",
+      "name": "devops-agent",
+      "location": "[parameters('location')]",
+      "properties": {
+        "appLogsConfiguration": {
+          "destination": "log-analytics",
+          "logAnalyticsConfiguration": {
+            "customerId": "[parameters('log_analytics_customer_id')]",
+            "sharedKey": "[parameters('log_analytics_shared_key')]"
+          }
+        },
+        "vnetConfiguration": {
+          "infrastructureSubnetId": "[parameters('infrastructureSubnetId')]",
+          "internal": true,
+          "runtimeSubnetId": "[parameters('runtimeSubnetId')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2022-01-01-preview",
+      "name": "devops-agent",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', 'devops-agent')]"
+      ],
+      "identity":{
+        "type":"SystemAssigned"
+      },
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', 'devops-agent')]",
+        "configuration": {
+          "secrets": [
+            {
+              "name": "registry-secret",
+              "value": "[parameters('registry_password')]"
+            },
+            {
+              "name": "azp-token",
+              "value": "[parameters('azp_token')]"
+            },
+            {
+              "name": "azp-url",
+              "value": "[parameters('azp_url')]"
+            }
+          ],
+          "registries": [
+            {
+              "server": "[parameters('registry_server')]",
+              "username": "[parameters('registry_username')]",
+              "passwordSecretRef": "registry-secret"
+            }
+          ]
+        },
+        "template": {
+          "containers": [
+            {
+              "image": "[parameters('image')]",
+              "name": "devops-agent",
+              "resources": {
+                "cpu": 1.75,
+                "memory": "3.5Gi"
+              },
+              "env": [
+                {
+                  "name": "AZP_TOKEN",
+                  "secretRef": "azp-token"
+                },
+                {
+                  "name": "AZP_URL",
+                  "secretRef": "azp-url"
+                },
+                {
+                  "name": "AZP_POOL",
+                  "value": "[parameters('azp_pool')]"
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": "[parameters('min_replicas')]",
+            "maxReplicas": "[parameters('max_replicas')]",
+            "rules": [
+              {
+                "name": "azure-pipelines",
+                "custom": {
+                  "type": "azure-pipelines",
+                  "metadata": {
+                    "poolID": "[parameters('azp_poolID')]",
+                    "targetPipelinesQueueLength": "1"
+                  },
+                  "auth": [
+                    {
+                      "secretRef": "azp-token",
+                      "triggerParameter": "personalAccessToken"
+                    },
+                    {
+                      "secretRef": "azp-url",
+                      "triggerParameter": "organizationURL"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}
