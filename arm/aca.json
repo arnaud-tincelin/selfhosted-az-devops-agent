@@ -1,0 +1,224 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "String"
+    },
+    "workspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the log analytics workspace to create."
+      }
+    },
+     "azp_url": {
+      "type": "String"
+    },
+    "azp_token": {
+      "type": "securestring"
+    },
+    "azp_pool": {
+      "type": "String"
+    },
+    "azp_poolID": {
+      "type": "String"
+    },
+    "registry_server": {
+      "type": "String"
+    },
+    "registry_username": {
+      "type": "String"
+    },
+    "registry_password": {
+      "type": "securestring"
+    },
+    "image": {
+      "type": "String"
+    },
+    "min_replicas": {
+      "type": "Int"
+    },
+    "max_replicas": {
+      "type": "Int"
+    }
+  },
+  "functions": [],
+  "variables": {},
+  "resources": [
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2020-11-01",
+      "name": "devops-agents",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "10.0.0.0/16"
+          ]
+        },
+        "dhcpOptions": {
+          "dnsServers": []
+        },
+        "subnets": [
+          {
+            "name": "infrastructure",
+            "properties": {
+              "addressPrefix": "10.0.0.0/21",
+              "serviceEndpoints": [],
+              "delegations": [],
+              "privateEndpointNetworkPolicies": "Enabled",
+              "privateLinkServiceNetworkPolicies": "Enabled"
+            }
+          },
+          {
+            "name": "runtime",
+            "properties": {
+              "addressPrefix": "10.0.8.0/21",
+              "serviceEndpoints": [],
+              "delegations": [],
+              "privateEndpointNetworkPolicies": "Enabled",
+              "privateLinkServiceNetworkPolicies": "Enabled"
+            }
+          }
+        ],
+        "virtualNetworkPeerings": [],
+        "enableDdosProtection": false
+      }
+    },
+    {
+      "type": "microsoft.operationalinsights/workspaces",
+      "apiVersion": "2021-12-01-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "westeurope",
+      "properties": {
+        "sku": {
+          "name": "pergb2018"
+        },
+        "retentionInDays": 30,
+        "features": {
+          "enableLogAccessUsingOnlyResourcePermissions": true
+        },
+        "workspaceCapping": {
+          "dailyQuotaGb": -1
+        },
+        "publicNetworkAccessForIngestion": "Enabled",
+        "publicNetworkAccessForQuery": "Enabled"
+      }
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2022-03-01",
+      "name": "devops-agent",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('microsoft.operationalinsights/workspaces', parameters('workspaceName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', 'devops-agents')]"
+      ],
+      "properties": {
+        "appLogsConfiguration": {
+          "destination": "log-analytics",
+          "logAnalyticsConfiguration": {
+            "customerId": "[reference(resourceId('microsoft.operationalinsights/workspaces', parameters('workspaceName')), '2021-12-01-preview').customerId]",
+            "sharedKey": "[listKeys(resourceId('microsoft.operationalinsights/workspaces', parameters('workspaceName')), '2021-12-01-preview').primarySharedKey]"
+          }
+        },
+        "vnetConfiguration": {
+          "infrastructureSubnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', 'devops-agents', 'infrastructure')]",
+          "internal": true,
+          "runtimeSubnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', 'devops-agents', 'runtime')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2022-03-01",
+      "name": "devops-agent",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', 'devops-agent')]"
+      ],
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', 'devops-agent')]",
+        "configuration": {
+          "secrets": [
+            {
+              "name": "registry-secret",
+              "value": "[parameters('registry_password')]"
+            },
+            {
+              "name": "azp-token",
+              "value": "[parameters('azp_token')]"
+            },
+            {
+              "name": "azp-url",
+              "value": "[parameters('azp_url')]"
+            }
+          ],
+          "registries": [
+            {
+              "server": "[parameters('registry_server')]",
+              "username": "[parameters('registry_username')]",
+              "passwordSecretRef": "registry-secret"
+            }
+          ]
+        },
+        "template": {
+          "containers": [
+            {
+              "image": "[parameters('image')]",
+              "name": "devops-agent",
+              "resources": {
+                "cpu": 1.75,
+                "memory": "3.5Gi"
+              },
+              "env": [
+                {
+                  "name": "AZP_TOKEN",
+                  "secretRef": "azp-token"
+                },
+                {
+                  "name": "AZP_URL",
+                  "secretRef": "azp-url"
+                },
+                {
+                  "name": "AZP_POOL",
+                  "value": "[parameters('azp_pool')]"
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": "[parameters('min_replicas')]",
+            "maxReplicas": "[parameters('max_replicas')]",
+            "rules": [
+              {
+                "name": "azure-pipelines",
+                "custom": {
+                  "type": "azure-pipelines",
+                  "metadata": {
+                    "poolID": "[parameters('azp_poolID')]",
+                    "targetPipelinesQueueLength": "1"
+                  },
+                  "auth": [
+                    {
+                      "secretRef": "azp-token",
+                      "triggerParameter": "personalAccessToken"
+                    },
+                    {
+                      "secretRef": "azp-url",
+                      "triggerParameter": "organizationURL"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {}
+}

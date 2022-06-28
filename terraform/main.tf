@@ -46,8 +46,8 @@ locals {
 
 resource "null_resource" "build_image" {
   triggers = {
-    dockerfile         = filemd5("${path.module}/docker/Dockerfile") # this variable aims to trigger image rebuild on file changes
-    startfile          = filemd5("${path.module}/docker/start.sh") # this variable aims to trigger image rebuild on file changes
+    dockerfile         = filemd5("${path.module}/../docker/Dockerfile") # this variable aims to trigger image rebuild on file changes
+    startfile          = filemd5("${path.module}/../docker/start.sh") # this variable aims to trigger image rebuild on file changes
     acr_name           = azurerm_container_registry.this.name
     acr_rg             = azurerm_container_registry.this.resource_group_name
     image_name         = local.image_name
@@ -56,7 +56,7 @@ resource "null_resource" "build_image" {
   provisioner "local-exec" {
     command = <<EOT
     az acr login --name ${self.triggers.acr_name}
-    az acr build --registry ${self.triggers.acr_name} -t ${self.triggers.image_name} ${path.module}/docker
+    az acr build --registry ${self.triggers.acr_name} -t ${self.triggers.image_name} ${path.module}/../docker
     EOT
   }
 }

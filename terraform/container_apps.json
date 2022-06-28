@@ -64,7 +64,7 @@
   "resources": [
     {
       "type": "Microsoft.App/managedEnvironments",
-      "apiVersion": "2022-01-01-preview",
+      "apiVersion": "2022-03-01",
       "name": "devops-agent",
       "location": "[parameters('location')]",
       "properties": {
@@ -84,7 +84,7 @@
     },
     {
       "type": "Microsoft.App/containerApps",
-      "apiVersion": "2022-01-01-preview",
+      "apiVersion": "2022-03-01",
       "name": "devops-agent",
       "location": "[parameters('location')]",
       "dependsOn": [
