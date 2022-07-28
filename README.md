@@ -16,31 +16,12 @@ Note: If there is no agent in the pool, the pipeline will fail. To workaround th
 
 ## Deploy the solution
 
-This repository deploys:
+This repositories has 3 implementations to create self-hosted runners:
 
-- a resource group
-- a VNET with 2 subnets to host the container apps
-- a container registry to store the agent image + build & publish the docker image
-- a log analytics workspace to store logs from the container apps
-- a container apps environment + a container apps
-
-There are 2 implementations of the same infrastructure in this repository:
-
-- using Terraform in the `terraform` folder:  
-    To deploy, run the following commands:
-
-    ```bash
-    az login
-    terraform init
-    terraform apply -auto-approve
-    ```
-
-- using ARM template in the `arm` folder:
-    To deploy, run the following commands:
-
-    ```bash
-    ./deploy.sh myRG myLocation myACR myWorkspace https://dev.azure.com/myOrg myPoolName myPoolID myToken MaxRunnerCount
-    ```
+- based on Azure Container Apps:
+  - arm
+  - terraform
+- based on Azure Kubernetes Services with Keda
 
 ## Create a "placeholder" agent
 
