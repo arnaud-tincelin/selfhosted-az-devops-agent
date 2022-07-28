@@ -1,4 +1,4 @@
-# Complete example to deploy AzureDevops Agents on Container Apps
+# Complete example to deploy SelfHosted AzureDevops Agents on Container Apps or Kubernetes
 
 This example deploys a full environment to support azure devops agents. For each new pipeline, one agent container will be instanciated, and then removed once the pipeline ends.
 
